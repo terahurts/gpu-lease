@@ -20,7 +20,7 @@ If you'd rather have one click, put all four in one startup file:
 ```bat
 start "" cmd /k C:\llama\start-llama.bat
 start "" cmd /k C:\ComfyUI\run_nvidia_gpu.bat
-start "" cmd /k C:\Users\terah\Projects\gpu-lease\examples\windows\gpu-lease.cmd
+start "" cmd /k C:\gpu-lease\examples\windows\gpu-lease.cmd
 start "" "C:\Program Files\MyChatApp\MyChatApp.exe"
 ```
 

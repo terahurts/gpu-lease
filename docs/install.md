@@ -10,20 +10,24 @@ you know you're still on track.
 
 ---
 
-## Step 1 — Where the folder is
+## Step 1 — Put the folder somewhere permanent
 
-The program lives in a folder on this computer:
+`gpu-lease` is a folder of ordinary files: there is no installer to run and
+nothing to download. Put the `gpu-lease` folder somewhere you will not delete by
+accident. **This guide assumes:**
 
 ```
-C:\Users\terah\Projects\gpu-lease
+C:\gpu-lease
 ```
 
-Open it with File Explorer to have a look. You will see `README.md`,
-`src`, `docs`, `examples`. That's the whole thing; there is nothing to
-download.
+So its contents sit directly in `C:\gpu-lease` — open it in File Explorer and
+you should see `README.md`, `src`, `docs`, `examples`. Any other location works
+just as well; if you choose one, read every `C:\gpu-lease` below as *your* path.
 
-> If you are setting this up on a *different* computer, copy the whole
-> `gpu-lease` folder across. It has no installer and no other files elsewhere.
+> The folder is the whole program. Step 3 registers it with Python so you can
+> type `gpu-lease` from anywhere; that registration is the only thing that lives
+> outside this folder, and
+> [troubleshooting.md](troubleshooting.md#how-to-undo-everything) removes it.
 
 ## Step 2 — Open a terminal
 
@@ -42,7 +46,7 @@ use it three times in this guide.
 Type this (you can paste it with a right-click) and press Enter:
 
 ```powershell
-cd C:\Users\terah\Projects\gpu-lease
+cd C:\gpu-lease
 python -m pip install -e .
 ```
 
@@ -110,7 +114,7 @@ In the same terminal:
 gpu-lease init -o gpu-lease.toml
 ```
 
-**You should see** `wrote C:\Users\terah\Projects\gpu-lease\gpu-lease.toml`.
+**You should see** `wrote C:\gpu-lease\gpu-lease.toml`.
 
 Now open it in Notepad:
 
@@ -226,7 +230,7 @@ gpu-lease doctor -c gpu-lease.toml
 **You should see** something like:
 
 ```
-config      C:\Users\terah\Projects\gpu-lease\gpu-lease.toml
+config      C:\gpu-lease\gpu-lease.toml
 lock        'gpu-lease' (mode queue)
 vram        2,206 / 16,376 MiB used
 gate        not running
@@ -276,7 +280,7 @@ Now test for real:
 
 Typing that command daily gets old. One `.bat` file fixes it.
 
-1. In File Explorer, go to `C:\Users\terah\Projects\gpu-lease\examples\windows`.
+1. In File Explorer, go to `C:\gpu-lease\examples\windows`.
 2. Right-click **gpu-lease.cmd** → **Edit**.
 3. Change the `REPO=` line if your folder is somewhere else, and the `PYTHON=`
    line if `py -3.13` isn't what you use (`python` is a safe substitute).

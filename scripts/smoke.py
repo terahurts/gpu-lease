@@ -1,4 +1,10 @@
-"""Live smoke test: the new package against the real llama.cpp and ComfyUI."""
+"""Live smoke test: the new package against the real llama.cpp and ComfyUI.
+
+Assumes the real servers are on their default ports - llama.cpp on 6772,
+ComfyUI on 8188 - and runs the gate on spare ports (6780/8180) so it can be
+re-run while a normal gate is up. Change the two `upstream` lines for a
+different machine. Run from anywhere:  python scripts/smoke.py
+"""
 import json
 import os
 import subprocess
@@ -6,8 +12,8 @@ import sys
 import time
 import urllib.request
 
-REPO = r"C:\Users\terah\Projects\gpu-lease"
-PY = r"C:\Python313\python.exe"
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PY = sys.executable
 CFG = os.path.join(os.environ["TEMP"], "gpu-lease-smoke.toml")
 
 open(CFG, "w", encoding="utf-8").write("""
