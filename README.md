@@ -37,6 +37,7 @@ server, and a generic kind for everything else.
 > | [troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix, plus how to undo |
 > | [faq.md](docs/faq.md) | safety, speed, two GPUs, other programs |
 > | [glossary.md](docs/glossary.md) | port, lease, VRAM, endpoint, … |
+> | [backends.md](docs/backends.md) | which programs work, and what frees their VRAM |
 >
 > Everything below is the technical reference for people who want to understand
 > or change the machinery.
