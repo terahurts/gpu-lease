@@ -95,5 +95,26 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(backend.hold, "response")
 
 
+class TestIdleFree(unittest.TestCase):
+    def _cfg(self, extra):
+        row = {"name": "comfy", "kind": "comfyui",
+               "listen": "127.0.0.1:8188",
+               "upstream": "http://127.0.0.1:8198"}
+        row.update(extra)
+        return from_text({"backend": [row]})
+
+    def test_free_after_is_parsed(self):
+        cfg = self._cfg({"idle": {"free_after": 3600}})
+        self.assertEqual(cfg.backends[0].idle_free_after, 3600)
+
+    def test_absent_idle_means_off(self):
+        self.assertEqual(self._cfg({}).backends[0].idle_free_after, 0)
+
+    def test_unknown_idle_key_is_rejected(self):
+        with self.assertRaises(ConfigError) as ctx:
+            self._cfg({"idle": {"freeafter": 60}})
+        self.assertIn("freeafter", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

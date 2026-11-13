@@ -48,6 +48,12 @@ class Engine:
                                    mode=cfg.lease.mode)
         self.relays = []
         self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._idle_thread = None
+        # When each backend last took the card, for [backend.idle].
+        self.last_used = {b.name: time.monotonic() for b in cfg.backends}
+        self.last_freed = {}
+        self.idle_check = 15.0
 
     # -- logging -----------------------------------------------------------
     def log(self, message, level="info"):
@@ -65,6 +71,7 @@ class Engine:
     # -- the interesting part ---------------------------------------------
     def on_acquired(self, backend, request_body):
         """Runs with the lock held: nobody can take the card mid-way."""
+        self.last_used[backend.name] = time.monotonic()
         for other in self.cfg.backends:
             if other is backend or other.evict_hook is None:
                 continue
@@ -120,7 +127,56 @@ class Engine:
         for relay in self.relays:
             threading.Thread(target=relay.serve_forever, daemon=True,
                              name="relay-%s" % relay.backend.name).start()
+        if any(b.idle_free_after for b in self.cfg.backends):
+            self._idle_thread = threading.Thread(target=self._idle_loop,
+                                                 daemon=True, name="idle")
+            self._idle_thread.start()
         return self
+
+    def _idle_loop(self):
+        while not self._stop.wait(self.idle_check):
+            try:
+                self._free_idle()
+            except Exception as exc:  # noqa: BLE001 - never kill the loop
+                self.log("idle check failed: %s" % exc)
+
+    def _free_idle(self, now=None):
+        """Run a backend's evict hook once nothing has used it for
+        [backend.idle] free_after seconds.
+
+        Only runs when the card is free and nobody is queued, takes the
+        lease so it cannot race a turn, and is safe to call by hand.
+        """
+        now = time.monotonic() if now is None else now
+        for backend in self.cfg.backends:
+            after = backend.idle_free_after
+            if not after or backend.evict_hook is None:
+                continue
+            if self.last_freed.get(backend.name, 0.0) >= self.last_used.get(
+                    backend.name, 0.0):
+                continue          # already freed since the last turn
+            if now - self.last_used.get(backend.name, now) < after:
+                continue
+            state = self.leases.status()
+            if state["owner"] or state["waiting"]:
+                continue
+            try:
+                lease = self.leases.acquire("idle", priority=100,
+                                            timeout=0)
+            except LeaseTimeout:
+                continue      # someone grabbed it between the check and here
+            try:
+                text = evict(backend, log=lambda m: self.log(m, "debug"))
+                when = ("%dmin" % (after // 60) if after >= 60
+                        else "%ds" % after)
+                self.log("%s idle for %s: %s" % (backend.name, when, text))
+            except Exception as exc:  # noqa: BLE001 - keep serving
+                self.log("idle free of %s failed: %s" % (backend.name, exc))
+            finally:
+                lease.release()
+                stamp = time.monotonic()
+                self.last_used[backend.name] = stamp
+                self.last_freed[backend.name] = stamp
 
     def serve(self):
         try:
@@ -154,6 +210,7 @@ class Engine:
         return 0
 
     def close(self):
+        self._stop.set()
         for relay in self.relays:
             try:
                 relay.shutdown()

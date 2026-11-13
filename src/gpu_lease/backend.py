@@ -136,6 +136,7 @@ class Backend:
     token: str = ""
     expect_mib: int = 0
     passthrough_log: bool = True
+    idle_free_after: int = 0   # seconds of no turns before evicting; 0 = off
 
     @property
     def host(self):

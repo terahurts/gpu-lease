@@ -65,6 +65,7 @@ Duplicate this block for each program. The `name` is just a label for the log.
 | `priority` | who goes first among *waiting* requests. Lower wins; equal = arrival order | `0` for chat, `10` for images |
 | `token` | optional password for this door only | `""` (off) |
 | `health` | a harmless address the health check pokes | set by `kind` |
+| `[backend.idle] free_after` | seconds of no use before the doorman frees this program's memory for it (needs a `kind` that knows how, e.g. `comfyui`) | `0` (off) |
 
 The `kind` values, in plain terms:
 

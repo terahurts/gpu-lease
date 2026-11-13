@@ -23,6 +23,7 @@ BOUND_KEYS = {"name", "kind", "listen", "upstream", "priority", "token",
               "health", "expect_mib", "passthrough_log", "gated_last",
               "gated_suffix", "gated_paths", "hold"}
 TABLES = {"evict": "evict", "prepare": "prepare", "watch": "watch"}
+SCALAR_TABLES = {"idle"}   # parsed by hand: not a Hook/Watch
 
 
 class ConfigError(ValueError):
@@ -144,7 +145,20 @@ def _backend(row, source, index):
                 raise ConfigError("%s (%s).%s must be a table"
                                   % (label, name, table))
             overrides[field] = value
-    unknown = set(row) - BOUND_KEYS - set(TABLES)
+    idle = row.get("idle")
+    if idle is not None:
+        if not isinstance(idle, dict):
+            raise ConfigError("%s (%s).idle must be a table" % (label, name))
+        extra = set(idle) - {"free_after"}
+        if extra:
+            raise ConfigError("%s (%s).idle has unknown keys: %s"
+                              % (label, name, ", ".join(sorted(extra))))
+        try:
+            overrides["idle_free_after"] = int(idle.get("free_after", 0))
+        except (TypeError, ValueError):
+            raise ConfigError("%s (%s).idle.free_after must be a whole "
+                              "number of seconds" % (label, name))
+    unknown = set(row) - BOUND_KEYS - set(TABLES) - SCALAR_TABLES
     if unknown:
         raise ConfigError("%s (%s) has unknown keys: %s"
                           % (label, name, ", ".join(sorted(unknown))))

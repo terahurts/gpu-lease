@@ -71,6 +71,53 @@ class ProxyTest(unittest.TestCase):
         return status, data, time.monotonic() - started, extra
 
     # -- tests -------------------------------------------------------------
+
+    def test_idle_free_runs_the_evict_hook_once(self):
+        self.start()
+        self.engine.cfg.backends[1].idle_free_after = 60
+        self.engine.last_used["comfy"] = time.monotonic() - 61
+        self.engine._free_idle()
+        self.engine._free_idle()          # already freed since the last turn
+        self.engine._free_idle(now=time.monotonic() + 3600)
+        self.assertEqual(self.comfy.count("/free"), 1)
+        # a new turn (stamped now) re-arms it
+        self.engine.last_used["comfy"] = time.monotonic()
+        self.engine._free_idle(now=time.monotonic() + 61)
+        self.assertEqual(self.comfy.count("/free"), 2)
+
+    def test_idle_free_waits_while_someone_holds_the_card(self):
+        self.start()
+        self.engine.cfg.backends[1].idle_free_after = 60
+        self.engine.last_used["comfy"] = time.monotonic() - 61
+        lease = self.engine.leases.acquire("llm", priority=0, timeout=0)
+        try:
+            self.engine._free_idle()
+        finally:
+            lease.release()
+        self.assertEqual(self.comfy.count("/free"), 0)
+
+    def test_idle_free_waits_while_a_request_is_queued(self):
+        self.start()
+        self.engine.cfg.backends[1].idle_free_after = 60
+        self.engine.last_used["comfy"] = time.monotonic() - 61
+        held = self.engine.leases.acquire("llm", priority=0, timeout=0)
+        got = []
+        waiter = threading.Thread(
+            target=lambda: got.append(
+                self.engine.leases.acquire("comfy", priority=0, timeout=5)),
+            daemon=True)
+        waiter.start()
+        try:
+            self.assertTrue(wait_until(
+                lambda: self.engine.leases.status()["waiting"] >= 1, 5))
+            self.engine._free_idle()
+        finally:
+            held.release()
+            waiter.join(5)
+            for lease in got:
+                lease.release()
+        self.assertEqual(self.comfy.count("/free"), 0)
+
     def test_turn_evicts_the_other_side_then_prepares_itself(self):
         self.start()
         self.state["m1"] = "loaded"                    # llama is holding VRAM

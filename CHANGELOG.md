@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 - 2026-11-13
+
+- `[backend.idle] free_after = <seconds>`: run a backend's evict hook once
+  nothing has used it for that long, so an idle ComfyUI stops holding VRAM and
+  cached memory. Only runs when the card is free and nobody is queued, takes the
+  lease so it cannot race a turn, fires once per idle period, and re-arms when
+  the backend is used again. With `[backend.evict]` it applies to any backend,
+  llama.cpp included.
+- 55 tests (6 new: parsed config and five idle-free cases).
+
 ## 0.2.0 - 2026-11-13
 
 - `kind` presets for Ollama, LM Studio and KoboldCpp. Ollama unloads with

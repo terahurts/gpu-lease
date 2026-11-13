@@ -85,6 +85,10 @@ the preset `sleeping`. It is a safety net, not a substitute for the evict hook:
   turn ~25 s).
 - ComfyUI never frees VRAM on its own; there is no idle timer. This is why the
   gate exists.
+- `[backend.idle] free_after = 3600` runs that same `/free` call once the card
+  has been unused for an hour, so a forgotten session does not hold 12 GB all
+  night. The cost is a cold start on the next render (~134 s measured cold vs
+  36 s warm), which is the trade you are choosing.
 
 ---
 
