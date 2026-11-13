@@ -6,6 +6,11 @@ load at the same moment, the card runs out of memory and something breaks.
 `gpu-lease` is a small program that sits between your apps and those two
 programs and makes them take turns. That's the whole idea.
 
+**Which programs are supported.** It has been tested with **llama.cpp and
+ComfyUI**. There are presets for **Ollama**, **LM Studio** and **KoboldCpp**
+that should work the same way, but they haven't been tested yet — so with
+those, YMMV.
+
 **What it is not.** It doesn't change your models, your apps, or your settings
 inside them. It doesn't run in the cloud. It isn't a driver or a service that
 starts itself behind your back. If you stop it, you are back where you started.

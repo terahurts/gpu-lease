@@ -14,7 +14,7 @@ from .lease import Lease, LeaseManager, LeaseTimeout
 from .lock import ExclusiveLock, LockError
 from .proxy import Engine
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "lease", "Engine", "Config", "ConfigError", "LeaseConfig", "LogConfig",

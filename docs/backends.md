@@ -20,17 +20,30 @@ and *how do I make it load before I let the request through*.
 |---|---|---|---|---|---|
 | llama.cpp `llama-server` | 8080 | yes | `POST /models/unload` | `POST /models/load` + poll | **[built-in]** `kind = "llama"` |
 | ComfyUI | 8188 | yes | `POST /free` | implicit on request | **[built-in]** `kind = "comfyui"` |
-| Ollama | 11434 | yes | `POST /api/generate {keep_alive:0}` per model from `/api/ps` | implicit on request | queue works today (`kind = "openai"`); evict needs `OLLAMA_KEEP_ALIVE=0` until a `kind = "ollama"` exists |
-| LM Studio | 1234 | yes | `POST /api/v1/models/unload {instance_id}` | `POST /api/v1/models/load` | queue works today (`kind = "openai"`); self-evicts on model switch, not when another program wants the card |
-| KoboldCpp | 5001 | yes | admin endpoint **[open]**; `--adminunloadtimeout` is the config-only route | implicit on request | queue works today (`kind = "openai"`); see notes |
+| Ollama | 11434 | yes | `POST /api/generate {keep_alive:0}` per model from `/api/ps` | implicit on request | **[built-in, untested]** `kind = "ollama"` |
+| LM Studio | 1234 | yes | `POST /api/v1/models/unload {instance_id}` | `POST /api/v1/models/load` | **[built-in, untested]** `kind = "lmstudio"` |
+| KoboldCpp | 5001 | yes | admin route (probed); `--adminunloadtimeout` is the config-only route | implicit on request | **[built-in, untested]** `kind = "koboldcpp"` |
 | anything OpenAI-compatible | — | yes | none | implicit | **[built-in]** `kind = "openai"` |
 | anything else | — | yes | one fixed request (`[backend.evict]`) | one fixed request (`[backend.prepare]`) | **[built-in]** `kind = "generic"` |
 
-"Queue works today" means no code change: `kind = "openai"` gates
-`/v1/chat/completions`, `/v1/completions`, `/v1/responses` and
+**[built-in, untested]** means the code exists, the call sequence is covered by
+tests against mock servers, and nobody has pointed it at the real program yet.
+llama.cpp and ComfyUI are the only kinds with a *measured* eviction.
+
+## Tested and untested
+
+**llama.cpp and ComfyUI are the supported, tested combinations.** Ollama, LM
+Studio and KoboldCpp have `kind` presets and behave the same way in the queue,
+but they were written from vendor documentation: they *should* work, and that is
+not the same as *does*. YMMV, YOLO. If one misbehaves, the fix is almost always
+in the eviction call, and the notes below say which call is unverified.
+
+`kind = "openai"` remains the zero-code option for any OpenAI-compatible server:
+it gates `/v1/chat/completions`, `/v1/completions`, `/v1/responses` and
 `/v1/embeddings`-style paths and holds the lease for the whole response. What it
-does *not* do is free the other program's VRAM, so an evict hook (or self-eviction
-by the program) is still required for the collision to be impossible.
+does *not* do is free the other program's VRAM, so an evict hook (or
+self-eviction by the program) is still required for the collision to be
+impossible.
 
 ---
 

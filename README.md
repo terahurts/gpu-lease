@@ -22,6 +22,13 @@ either: backends are entries in a TOML file with three hooks (gate, evict,
 prepare), and there are presets for llama.cpp, ComfyUI, any OpenAI-compatible
 server, and a generic kind for everything else.
 
+> **Tested with llama.cpp and ComfyUI. Nothing else has been tested.**
+> Presets for Ollama, LM Studio and KoboldCpp exist, written from their API
+> documentation and covered by tests against mock servers, so they *should*
+> work — but nobody has run those three end to end yet. YMMV, YOLO, and please
+> report what happens if it eats your afternoon.
+
+
 > ### New here? Start with the plain-language guide
 >
 > **[docs/start-here.md](docs/start-here.md)** — what this is, in one page, no

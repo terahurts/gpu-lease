@@ -59,21 +59,29 @@ Duplicate this block for each program. The `name` is just a label for the log.
 | setting | what it means | example |
 |---|---|---|
 | `name` | label only | `"llm"` |
-| `kind` | what sort of program: `llama`, `comfyui`, `openai`, `generic` | `"comfyui"` |
+| `kind` | what sort of program: `llama`, `comfyui`, `ollama`, `lmstudio`, `koboldcpp`, `openai`, `generic` | `"comfyui"` |
 | `listen` | the address the doorman answers on (the one your apps use) | `"127.0.0.1:8188"` |
 | `upstream` | where the real program now listens | `"http://127.0.0.1:8198"` |
 | `priority` | who goes first among *waiting* requests. Lower wins; equal = arrival order | `0` for chat, `10` for images |
 | `token` | optional password for this door only | `""` (off) |
 | `health` | a harmless address the health check pokes | set by `kind` |
 
-The four `kind` values, in plain terms:
+The `kind` values, in plain terms:
 
 | kind | use for | it knows how to |
 |---|---|---|
 | `llama` | llama.cpp's `llama-server` | ask it to unload models, wait for a model to finish loading |
 | `comfyui` | ComfyUI | free its memory before a turn, keep holding the card until a render truly finishes |
-| `openai` | any program speaking the OpenAI API (KoboldCpp, LM Studio, vLLM, oobabooga…) | nothing special — it just queues |
+| `ollama` | Ollama | ask `/api/ps` what is loaded, unload each with `keep_alive: 0` |
+| `lmstudio` | LM Studio | unload every loaded instance because another program wants the card |
+| `koboldcpp` | KoboldCpp | unload through the admin endpoint (needs `--admin`) |
+| `openai` | any program speaking the OpenAI API (vLLM, oobabooga…) | nothing special — it just queues |
 | `generic` | anything else | nothing special — you can teach it with the tables below |
+
+> Only `llama` and `comfyui` have been tested against the real programs.
+> `ollama`, `lmstudio` and `koboldcpp` are built from their documentation and
+> *should* work — see [backends.md](backends.md#tested-and-untested) if one
+> doesn't. YMMV.
 
 ### What gets queued, and what doesn't
 

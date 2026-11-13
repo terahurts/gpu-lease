@@ -1,0 +1,36 @@
+# Alternative backends: Ollama, LM Studio, KoboldCpp.
+#
+# Paste one block into your config (or replace the "llm" block in
+# llama-comfyui.toml) and keep the comfy block next to it.
+#
+# The pattern never changes: gpu-lease takes the port your apps already know,
+# the program moves up one. All three kinds are UNTESTED against the real
+# programs - see docs/backends.md.
+
+# ---- Ollama ------------------------------------------------------------------
+# Start Ollama with the server one port up, then run `gpu-lease run -c <this>`:
+#   set OLLAMA_HOST=127.0.0.1:11534        (cmd)
+#   $env:OLLAMA_HOST="127.0.0.1:11534"     (PowerShell)
+# No prepare hook: Ollama loads the model inside the request, with the lease held.
+[[backend]]
+name = "ollama"
+kind = "ollama"
+listen = "127.0.0.1:11434"
+upstream = "http://127.0.0.1:11534"
+priority = 10                  # a chat reply can wait behind a render
+
+# ---- LM Studio ---------------------------------------------------------------
+# Developer tab -> Server -> port 1334, or: lms server start --port 1334
+# [[backend]]
+# name = "lmstudio"
+# kind = "lmstudio"
+# listen = "127.0.0.1:1234"
+# upstream = "http://127.0.0.1:1334"
+
+# ---- KoboldCpp ---------------------------------------------------------------
+# Needs admin mode for the unload call:  --port 5101 --admin
+# [[backend]]
+# name = "koboldcpp"
+# kind = "koboldcpp"
+# listen = "127.0.0.1:5001"
+# upstream = "http://127.0.0.1:5101"

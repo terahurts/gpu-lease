@@ -49,6 +49,14 @@ the card, plus (optionally) how to make the program free its memory. See
 The free-memory part is optional; without it, the doorman still queues, it just
 can't force the other program to let go.
 
+**Does it work with Ollama, LM Studio or KoboldCpp?**
+
+It *should*. Each has a ready-made `kind` (`"ollama"`, `"lmstudio"`,
+`"koboldcpp"`) that queues its requests and knows how to make it let go of the
+card. But only llama.cpp and ComfyUI have been tested end to end; the other
+three were written from their documentation. Treat them as "should work", not
+"does work". YMMV.
+
 **I have two graphics cards. Does it use both?**
 
 No. One lease = one card's worth of turns. Two cards means two copies of the

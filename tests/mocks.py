@@ -152,6 +152,87 @@ def comfy_mock(job_seconds=0.6):
     return mock, jobs
 
 
+def ollama_mock(models=("m1",)):
+    """Ollama: /api/ps is the residency list, keep_alive:0 unloads, and the
+    list lags the unload answer by exactly one call (measured behaviour)."""
+    mock = Mock()
+    resident = set(models)
+    pending = set()
+
+    def ps(_path, _body):
+        for name in list(pending):
+            resident.discard(name)
+            pending.discard(name)
+        return 200, {"models": [{"name": n, "size_vram": 100}
+                                for n in sorted(resident)]}
+
+    def generate(_path, body):
+        name = (body or {}).get("model")
+        if name and name.startswith("embed:"):
+            return 400, {"error": '"%s" does not support generate' % name}
+        if (body or {}).get("keep_alive") == 0:
+            pending.add(name)
+        return 200, {"model": name, "response": "", "done": True,
+                     "done_reason": "unload"}
+
+    def embed(_path, body):
+        name = (body or {}).get("model")
+        if (body or {}).get("keep_alive") == 0:
+            pending.add(name)
+        return 200, {"embeddings": [[]]}
+
+    mock.routes["/api/ps"] = ps
+    mock.routes["/api/generate"] = generate
+    mock.routes["/api/embed"] = embed
+    return mock, resident
+
+
+def lmstudio_mock(loaded=("openai/gpt-oss-20b",), idle=("qwen2.5-7b",)):
+    """LM Studio: /api/v0/models reports loaded vs not-loaded."""
+    mock = Mock()
+    state = {name: "loaded" for name in loaded}
+    state.update({name: "not-loaded" for name in idle})
+
+    def models(_path, _body):
+        return 200, {"data": [{"id": n, "instance_id": n, "state": s}
+                              for n, s in state.items()]}
+
+    def unload(_path, body):
+        name = (body or {}).get("instance_id")
+        if name in state:
+            state[name] = "not-loaded"
+        return 200, {"instance_id": name}
+
+    mock.routes["/api/v0/models"] = models
+    mock.routes["/api/v1/models/unload"] = unload
+    return mock, state
+
+
+def koboldcpp_mock(model="kcpp-model", admin_route="/api/admin/unload"):
+    """KoboldCpp: /api/v1/model reports the current model; admin_route=None
+    makes every admin candidate answer 404, like a build without --admin."""
+    mock = Mock()
+    state = {"model": model}
+
+    def unload(_path, _body):
+        state["model"] = ""
+        return 200, {"ok": True}
+
+    def missing(_path, _body):
+        return 404, {"detail": "not found"}
+
+    def current(_path, _body):
+        if not state["model"]:
+            return 503, {"detail": "No model loaded"}
+        return 200, {"result": state["model"]}
+
+    for path in ("/api/admin/unload", "/api/v1/admin/unload",
+                 "/api/extra/admin/unload"):
+        mock.routes[path] = unload if path == admin_route else missing
+    mock.routes["/api/v1/model"] = current
+    return mock, state
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))

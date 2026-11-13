@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 - 2026-11-13
+
+- `kind` presets for Ollama, LM Studio and KoboldCpp. Ollama unloads with
+  `keep_alive: 0` per resident model (with an embed-route fallback), LM Studio
+  through `/api/v1/models/unload`, KoboldCpp through its admin endpoint. **All
+  three are untested against the real programs** - llama.cpp and ComfyUI remain
+  the tested combinations. YMMV.
+- `docs/backends.md`: per-program API notes - what frees VRAM, what loads a
+  model - with numbers measured against llama.cpp, ComfyUI and Ollama, and
+  docs-only notes for LM Studio and KoboldCpp.
+- Docs assume the folder is at `C:\gpu-lease` instead of the author's home
+  directory; the README opens with the project's origin note.
+- 49 tests (8 new: the three eviction sequences, against mock servers).
+
 ## 0.1.0 - 2026-11-13
 
 First standalone release, extracted from a working two-server setup
@@ -20,9 +34,6 @@ First standalone release, extracted from a working two-server setup
   every listener; `gpu_lease.lease()` for in-process turns.
 - 41 tests, including two-process lock contention, unfairness regressions and a
   full proxy integration suite against mock backends.
-- `docs/backends.md`: per-program API notes - what frees VRAM, what loads a
-  model - with numbers measured against llama.cpp, ComfyUI and Ollama, and
-  docs-only notes for LM Studio and KoboldCpp.
 - Plain-language documentation for non-technical users: `docs/start-here.md`,
   `install.md`, `config-explained.md`, `day-to-day.md`, `troubleshooting.md`,
   `faq.md`, `glossary.md`, with a link checker (`scripts/check_links.py`) so the

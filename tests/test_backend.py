@@ -3,7 +3,8 @@ import unittest
 
 from gpu_lease.backend import (Hook, Watch, build, evict, job_id_from,
                                llama_load, llama_models, prepare, watch_done)
-from tests.mocks import comfy_mock, llama_mock
+from tests.mocks import (comfy_mock, koboldcpp_mock, llama_mock,
+                         lmstudio_mock, ollama_mock)
 
 
 class TestGating(unittest.TestCase):
@@ -135,3 +136,83 @@ class TestWatch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestOtherServers(unittest.TestCase):
+    """Presets built from vendor docs (untested against the real programs),
+    so these lock down the call sequence, not the vendored behaviour."""
+
+    def test_ollama_gates_native_and_openai_paths(self):
+        backend = build("o", ("127.0.0.1", 1), "http://127.0.0.1:2", "ollama")
+        for path in ("/v1/chat/completions", "/v1/embeddings", "/api/chat",
+                     "/api/generate", "/api/embed"):
+            self.assertTrue(backend.gates("POST", path), path)
+        for path in ("/api/ps", "/api/tags", "/api/version"):
+            self.assertFalse(backend.gates("POST", path), path)
+
+    def test_ollama_evict_unloads_every_resident_model(self):
+        mock, resident = ollama_mock(models=("m1", "m2"))
+        backend = build("o", ("127.0.0.1", 1), mock.url, "ollama")
+        try:
+            text = evict(backend)
+            self.assertEqual(sorted(resident), [])
+            self.assertEqual(mock.count("/api/generate"), 2)
+            self.assertIn("m1", text)
+        finally:
+            mock.close()
+
+    def test_ollama_embedding_model_falls_back_to_embed_route(self):
+        mock, resident = ollama_mock(models=("embed:gemma",))
+        backend = build("o", ("127.0.0.1", 1), mock.url, "ollama")
+        try:
+            evict(backend)
+            self.assertEqual(sorted(resident), [])
+            self.assertEqual(mock.count("/api/generate"), 1)   # refused
+            self.assertGreaterEqual(mock.count("/api/embed"), 1)
+        finally:
+            mock.close()
+
+    def test_lmstudio_evict_unloads_only_loaded_instances(self):
+        mock, state = lmstudio_mock()
+        backend = build("l", ("127.0.0.1", 1), mock.url, "lmstudio")
+        try:
+            evict(backend)
+            self.assertEqual(state["openai/gpt-oss-20b"], "not-loaded")
+            self.assertEqual(mock.count("/api/v1/models/unload"), 1)
+        finally:
+            mock.close()
+
+    def test_koboldcpp_evict_uses_an_admin_route(self):
+        mock, state = koboldcpp_mock()
+        backend = build("k", ("127.0.0.1", 1), mock.url, "koboldcpp")
+        try:
+            evict(backend)
+            self.assertEqual(state["model"], "")
+            self.assertEqual(mock.count("/api/admin/unload"), 1)
+        finally:
+            mock.close()
+
+    def test_koboldcpp_without_admin_explains_itself(self):
+        mock, state = koboldcpp_mock(admin_route=None)
+        backend = build("k", ("127.0.0.1", 1), mock.url, "koboldcpp")
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                evict(backend)
+            self.assertIn("--admin", str(ctx.exception))
+            self.assertNotEqual(state["model"], "")
+        finally:
+            mock.close()
+
+    def test_koboldcpp_gates_generate_and_streaming(self):
+        backend = build("k", ("127.0.0.1", 1), "http://127.0.0.1:2",
+                        "koboldcpp")
+        for path in ("/api/v1/generate", "/api/extra/generate/stream",
+                     "/v1/chat/completions", "/v1/completions"):
+            self.assertTrue(backend.gates("POST", path), path)
+        self.assertFalse(backend.gates("POST", "/api/extra/perf"))
+
+    def test_lmstudio_gates_chat_and_embedding_paths(self):
+        backend = build("l", ("127.0.0.1", 1), "http://127.0.0.1:2", "lmstudio")
+        for path in ("/v1/chat/completions", "/api/v0/chat/completions",
+                     "/api/v0/embeddings"):
+            self.assertTrue(backend.gates("POST", path), path)
+        self.assertFalse(backend.gates("POST", "/api/v0/models"))

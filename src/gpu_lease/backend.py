@@ -48,12 +48,44 @@ KINDS = {
         "evict": {"kind": "comfyui"},
         "health": "/queue",
     },
-    # Any OpenAI-compatible server that unloads on its own (Ollama, LM Studio,
-    # vLLM). Nothing to free remotely, so it only participates in turn-taking.
+    # Any OpenAI-compatible server with nothing to free remotely (vLLM in
+    # eager mode, text-generation-webui, ...). It only takes turns.
     "openai": {
         "gated_last": RUN_SEGMENTS,
         "hold": "response",
         "health": "/v1/models",
+    },
+    # Ollama keeps a model resident (keep_alive, 5 min default) and has no load
+    # call: the model loads inside the request, with the lease held. Measured
+    # 2026-11-13; /api/ps lags the unload response by one call, so poll.
+    "ollama": {
+        "gated_last": RUN_SEGMENTS + ("generate", "chat"),
+        "gated_paths": ("/api/embed", "/api/embeddings", "/api/generate",
+                        "/api/chat"),
+        "hold": "response",
+        "evict": {"kind": "ollama"},
+        "health": "/api/ps",
+    },
+    # LM Studio: JIT loading, idle TTL (60 min default), Auto-Evict on model
+    # switch, explicit unload. Preset built from the vendor docs - UNTESTED,
+    # see docs/backends.md.
+    "lmstudio": {
+        "gated_last": RUN_SEGMENTS,
+        "gated_suffix": ("/chat/completions", "/responses"),
+        "hold": "response",
+        "evict": {"kind": "lmstudio"},
+        "health": "/api/v0/models",
+    },
+    # KoboldCpp: one model per process, OpenAI-compatible plus native routes.
+    # Unloading requires --admin; the admin route is probed. UNTESTED, see
+    # docs/backends.md.
+    "koboldcpp": {
+        "gated_last": RUN_SEGMENTS + ("generate",),
+        "gated_paths": ("/api/v1/generate", "/api/extra/generate/stream",
+                        "/v1/chat/completions", "/v1/completions"),
+        "hold": "response",
+        "evict": {"kind": "koboldcpp"},
+        "health": "/api/v1/model",
     },
     "generic": {"hold": "response"},
 }
@@ -63,7 +95,8 @@ KINDS = {
 class Hook:
     """One HTTP call, optionally derived from the client's request body."""
 
-    kind: str = "http"            # http | llama | comfyui
+    kind: str = "http"            # http | llama | comfyui | ollama | ...
+                     # ... | lmstudio | koboldcpp
     method: str = "POST"
     path: str = ""
     body: dict = field(default_factory=dict)
@@ -204,6 +237,45 @@ def evict(backend, log=None):
                                % (backend.name, code, json.dumps(doc)[:200]))
         time.sleep(hook.settle or 0.5)
         text = "cached models freed"
+    elif hook.kind == "ollama":
+        names = ollama_resident(backend.upstream)
+        for model in names:
+            ollama_unload(backend.upstream, model)
+        deadline = time.monotonic() + hook.timeout
+        while time.monotonic() < deadline and ollama_resident(backend.upstream):
+            time.sleep(0.25)
+        left = ollama_resident(backend.upstream)
+        if left:
+            raise RuntimeError(
+                "%s still has %s resident and Ollama will not let go: start "
+                "Ollama with OLLAMA_KEEP_ALIVE=0, or run `ollama stop %s`"
+                % (backend.name, ", ".join(left), left[0]))
+        text = "unloaded %s" % (", ".join(names) or "nothing")
+    elif hook.kind == "lmstudio":
+        instances = lmstudio_loaded(backend.upstream)
+        for instance in instances:
+            lmstudio_unload(backend.upstream, instance)
+        deadline = time.monotonic() + hook.timeout
+        while (time.monotonic() < deadline
+               and lmstudio_loaded(backend.upstream)):
+            time.sleep(0.25)
+        text = "unloaded %s" % (", ".join(instances) or "nothing")
+    elif hook.kind == "koboldcpp":
+        model = koboldcpp_model(backend.upstream)
+        if not model:
+            text = "nothing loaded"
+        else:
+            route = koboldcpp_unload(backend.upstream)
+            if route is None:
+                raise RuntimeError(
+                    "%s (%s) will not unload: KoboldCpp needs --admin for the "
+                    "admin endpoint, or start it with --adminunloadtimeout 60 "
+                    "so it evicts itself" % (backend.name, model))
+            deadline = time.monotonic() + hook.timeout
+            while (time.monotonic() < deadline
+                   and koboldcpp_model(backend.upstream)):
+                time.sleep(0.25)
+            text = "unloaded %s via %s" % (model, route)
     else:
         code, doc = http_json(backend.upstream + hook.path, hook.body or None,
                               method=hook.method, timeout=hook.timeout,
@@ -351,6 +423,100 @@ def llama_load(upstream, model, timeout=300.0, log=None):
             continue
         raise RuntimeError("loading %s failed (%s): %s" % (model, code, msg))
     raise RuntimeError("timed out waiting for %s to load" % model)
+
+
+# ------------------------------------------------- other servers' residency
+# Ollama, LM Studio and KoboldCpp have no "load this preset" call, so only
+# eviction needs code. Their unload recipes were read from vendor docs; see
+# docs/backends.md for what is measured and what is not.
+
+def ollama_resident(upstream):
+    """Names of the models currently holding memory (GET /api/ps)."""
+    code, doc = http_json(upstream + "/api/ps", timeout=15)
+    if code != 200 or not isinstance(doc, dict):
+        return []
+    names = []
+    for row in doc.get("models") or []:
+        if isinstance(row, dict):
+            name = row.get("name") or row.get("model")
+            if name:
+                names.append(name)
+    return names
+
+
+def ollama_unload(upstream, model):
+    """keep_alive:0 is the only unload Ollama offers. /api/generate answers
+    "does not support generate" for embedding models, so the embed routes are
+    tried as a fallback. Returns the route that worked, or None.
+
+    The embedding fallback is UNTESTED: no embedding model was resident when
+    the unload calls were measured (docs/backends.md)."""
+    for path, body in (("/api/generate", {"model": model, "keep_alive": 0}),
+                       ("/api/embed", {"model": model, "input": [],
+                                       "keep_alive": 0}),
+                       ("/api/embeddings", {"model": model, "prompt": "",
+                                            "keep_alive": 0})):
+        code, _doc = http_json(upstream + path, body, timeout=60)
+        if code == 200:
+            return path
+    return None
+
+
+def lmstudio_loaded(upstream):
+    """Instance ids LM Studio reports as loaded, via the v0 API (v1 fallback).
+
+    UNTESTED: written from lmstudio.ai/docs/developer on 2026-11-13."""
+    for path in ("/api/v0/models", "/api/v1/models"):
+        code, doc = http_json(upstream + path, timeout=15)
+        if code != 200 or not isinstance(doc, dict):
+            continue
+        rows = doc.get("data") or doc.get("models") or []
+        if not isinstance(rows, list):
+            continue
+        loaded = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            state = str(row.get("state") or row.get("status") or "").lower()
+            ident = (row.get("instance_id") or row.get("id")
+                     or row.get("model_key"))
+            if ident and state in ("loaded", "idle", "running"):
+                loaded.append(ident)
+        return loaded
+    return []
+
+
+def lmstudio_unload(upstream, instance):
+    code, _doc = http_json(upstream + "/api/v1/models/unload",
+                           {"instance_id": instance}, timeout=60)
+    return code == 200
+
+
+KOBOLD_UNLOAD_ROUTES = ("/api/admin/unload", "/api/v1/admin/unload",
+                        "/api/extra/admin/unload")
+
+
+def koboldcpp_model(upstream):
+    """Current model name, or "" when nothing is loaded.
+
+    GET /api/v1/model answers {"result": "<name>"}; an unloaded KoboldCpp stops
+    answering it, which is what the evict poll keys on."""
+    code, doc = http_json(upstream + "/api/v1/model", timeout=10)
+    if code == 200 and isinstance(doc, dict):
+        return str(doc.get("result") or "")
+    return ""
+
+
+def koboldcpp_unload(upstream):
+    """First admin route that accepts an unload, or None.
+
+    UNTESTED: KoboldCpp exposes this only with --admin and the wiki does not
+    document the route, so the candidates are probed in order."""
+    for path in KOBOLD_UNLOAD_ROUTES:
+        code, _doc = http_json(upstream + path, {}, timeout=60)
+        if code in (200, 202):
+            return path
+    return None
 
 
 def _auth(backend):
