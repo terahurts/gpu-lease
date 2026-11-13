@@ -20,3 +20,7 @@ First standalone release, extracted from a working two-server setup
   every listener; `gpu_lease.lease()` for in-process turns.
 - 41 tests, including two-process lock contention, unfairness regressions and a
   full proxy integration suite against mock backends.
+- Plain-language documentation for non-technical users: `docs/start-here.md`,
+  `install.md`, `config-explained.md`, `day-to-day.md`, `troubleshooting.md`,
+  `faq.md`, `glossary.md`, with a link checker (`scripts/check_links.py`) so the
+  guides cannot rot silently.

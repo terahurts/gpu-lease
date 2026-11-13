@@ -16,6 +16,25 @@ either: backends are entries in a TOML file with three hooks (gate, evict,
 prepare), and there are presets for llama.cpp, ComfyUI, any OpenAI-compatible
 server, and a generic kind for everything else.
 
+> ### New here? Start with the plain-language guide
+>
+> **[docs/start-here.md](docs/start-here.md)** — what this is, in one page, no
+> jargon. Then **[docs/install.md](docs/install.md)** for every click and
+> keystroke of the Windows setup, with "you should see" checkpoints.
+>
+> | guide | for |
+> |---|---|
+> | [start-here.md](docs/start-here.md) | the idea in one page |
+> | [install.md](docs/install.md) | step-by-step setup, from zero |
+> | [config-explained.md](docs/config-explained.md) | every setting, in plain English |
+> | [day-to-day.md](docs/day-to-day.md) | the morning routine and reading the log |
+> | [troubleshooting.md](docs/troubleshooting.md) | symptom → cause → fix, plus how to undo |
+> | [faq.md](docs/faq.md) | safety, speed, two GPUs, other programs |
+> | [glossary.md](docs/glossary.md) | port, lease, VRAM, endpoint, … |
+>
+> Everything below is the technical reference for people who want to understand
+> or change the machinery.
+
 ```
 $ gpu-lease status
 gpu-lease  gpu-lease  [queue, queue timeout 1800s]
