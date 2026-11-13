@@ -1,3 +1,9 @@
+*This project is entirely vibe-coded by DeepSeek V4.1 Flash. It was originally created because my own GPU's VRAM was getting maxed-out when an AI chat app sent a request to a local model via Llama.CPP at the same time that I was using ComfyUI, causing my PC to grind to an almost-standstill.*
+
+*I'm not a coder and I have no idea how it works or if it will work successfully for you.*
+
+---
+
 # gpu-lease
 
 **One GPU, several VRAM-hungry servers, no OOM races.**
