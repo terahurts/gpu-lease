@@ -1,0 +1,47 @@
+# A server gpu-lease has no preset for: give it the three hooks directly.
+#
+#   evict    how to make it hand the card back (called on the *others*)
+#   prepare  how to be ready before its own request is forwarded
+#   watch    hold the turn past the response until the work really finished
+#
+# SD.Next, for example: unload its pipeline, and hold an image turn until its
+# history reports the job as completed.
+
+[lease]
+name = "gpu-lease"
+queue_timeout = 1800
+mode = "queue"
+
+[[backend]]
+name = "llm"
+kind = "llama"
+listen = "127.0.0.1:6772"
+upstream = "http://127.0.0.1:6872"
+
+[[backend]]
+name = "sdnext"
+kind = "generic"
+listen = "127.0.0.1:7861"
+upstream = "http://127.0.0.1:7862"
+gated_paths = ["/sdapi/v1/txt2img", "/sdapi/v1/img2img"]
+
+  [backend.evict]
+  kind = "http"
+  path = "/sdapi/v1/unload-checkpoint"
+  method = "POST"
+  expect = [200, 404]
+
+  [backend.watch]
+  path = "/sdapi/v1/progress?skip_current_image=true"
+  id_from = "task_id"
+  done_when = "status_completed"
+  timeout = 900
+  poll = 1.0
+
+# Any other HTTP hook works the same way:
+#
+#   [backend.prepare]
+#   kind = "http"
+#   path = "/v1/models/load"
+#   body_from = "body.model"      # take the model name from the client request
+#   expect = [200]

@@ -1,0 +1,37 @@
+# The two-server setup gpu-lease was written for.
+#
+# Clients keep the ports they already use; the real servers move one port up.
+# Nothing in either client has to change, and no config field can bypass the
+# gate - which is the whole point.
+
+[lease]
+name = "gpu-lease"
+queue_timeout = 1800        # an image job may hold the card ~40 s; a chat can wait
+mode = "queue"              # "reject" answers 429 at once instead
+early_headers_after = 20    # send 200 + keepalives after 20 s of waiting
+keepalive = 10
+grace = 240                 # ComfyUI is slow to boot; hold requests, don't 502
+vram_ceiling = 0            # set to e.g. 900 to require the card to be empty
+
+[logging]
+level = "info"
+
+[[backend]]
+name = "llm"
+kind = "llama"
+listen = "127.0.0.1:6772"           # what Marinara/curl/Goose already point at
+upstream = "http://127.0.0.1:6872"  # llama-server --port 6872
+priority = 0                        # interactive chat jumps queued renders
+# gated by default: /v1/chat/completions /v1/completions /v1/embeddings
+#                   /embedding /v1/rerank /infill /v1/responses
+
+[[backend]]
+name = "comfy"
+kind = "comfyui"
+listen = "127.0.0.1:8188"
+upstream = "http://127.0.0.1:8198"  # ComfyUI --port 8198
+priority = 10
+
+  [backend.watch]
+  timeout = 2700                    # give up holding after 45 min
+  poll = 1.0

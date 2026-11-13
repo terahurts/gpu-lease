@@ -1,0 +1,18 @@
+# Two OpenAI-compatible servers, no eviction hooks: they only take turns.
+# Useful when each server unloads its own models (Ollama, LM Studio, vLLM).
+
+[lease]
+mode = "reject"        # never queue: a busy GPU is a 429 with Retry-After: 1
+name = "gpu-lease"
+
+[[backend]]
+name = "big"
+kind = "openai"
+listen = "127.0.0.1:6772"
+upstream = "http://127.0.0.1:6872"
+
+[[backend]]
+name = "small"
+kind = "openai"
+listen = "127.0.0.1:6773"
+upstream = "http://127.0.0.1:6873"
